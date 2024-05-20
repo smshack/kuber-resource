@@ -33,7 +33,7 @@ aws sts get-caller-identity
 
 ```
 {
-    "StackId": "arn:aws:cloudformation:ap-northeast-2:221370546661:stack/smart-cluster-vpc/130f8750-ff52-11ee-b3f0-0a355b723c87"
+    "StackId": "arn:aws:cloudformation:ap-northeast-2:221370546661:stack/smart-cluster-vpc/fd90c030-1525-11ef-8dfe-025254541243"
 }
 ```
 
@@ -106,7 +106,7 @@ aws eks create-cluster \
   --region ap-northeast-2 \
   --name smart-cluster \
   --role-arn arn:aws:iam::221370546661:role/smart-ClusterRole \
-  --resources-vpc-config subnetIds=subnet-0019ca7f778a66290,subnet-0f7b5e4951552c963,subnet-0fa59931c4338ec23,subnet-094625a83c3c53f88,securityGroupIds=sg-0545bdb2852f2d23e
+  --resources-vpc-config subnetIds=subnet-04c1fa565da32dbaf,subnet-054ad0183286e717b,subnet-0b3861508471e6c1e,subnet-094b2fc905022e004,securityGroupIds=sg-032a2e66db2413eb0
 ```
 
 - 결과
@@ -175,7 +175,7 @@ aws eks --region ap-northeast-2 update-kubeconfig --name smart-cluster
 ## 6. 노드 그룹 생성
 
 ```
-aws eks create-nodegroup --cluster-name smart-cluster --nodegroup-name smart-cluster-nodegroup --node-role arn:aws:iam::221370546661:role/smart-ClusterRole --subnets subnet-0019ca7f778a66290 subnet-0f7b5e4951552c963 subnet-0fa59931c4338ec23 subnet-094625a83c3c53f88 --region ap-northeast-2
+aws eks create-nodegroup --cluster-name smart-cluster --nodegroup-name smart-cluster-nodegroup --node-role arn:aws:iam::221370546661:role/smart-ClusterRole --subnets subnet-04c1fa565da32dbaf subnet-054ad0183286e717b subnet-0b3861508471e6c1e subnet-094b2fc905022e004 --region ap-northeast-2
 ```
 
 - 결과
@@ -184,12 +184,13 @@ aws eks create-nodegroup --cluster-name smart-cluster --nodegroup-name smart-clu
 {
     "nodegroup": {
         "nodegroupName": "smart-cluster-nodegroup",
-        "nodegroupArn": "arn:aws:eks:ap-northeast-2:221370546661:nodegroup/smart-cluster/my-nodegroup/42c77ea9-2dbc-0835-dbee-37b85d901b8e",
+        "nodegroupArn": "arn:aws:eks:ap-northeast-2:221370546661:nodegroup/smart-cluster/smart-cluster-nodegroup/c8c7c620-77d6-1
+6e7-1d7e-6cd6f613bd34",
         "clusterName": "smart-cluster",
         "version": "1.29",
-        "releaseVersion": "1.29.0-20240415",
-        "createdAt": "2024-04-21T06:03:40.149000+09:00",
-        "modifiedAt": "2024-04-21T06:03:40.149000+09:00",
+        "releaseVersion": "1.29.3-20240514",
+        "createdAt": "2024-05-19T00:10:19.970000+09:00",
+        "modifiedAt": "2024-05-19T00:10:19.970000+09:00",
         "status": "CREATING",
         "capacityType": "ON_DEMAND",
         "scalingConfig": {
@@ -201,10 +202,10 @@ aws eks create-nodegroup --cluster-name smart-cluster --nodegroup-name smart-clu
             "t3.medium"
         ],
         "subnets": [
-            "subnet-0019ca7f778a66290",
-            "subnet-0f7b5e4951552c963",
-            "subnet-0fa59931c4338ec23",
-            "subnet-094625a83c3c53f88"
+            "subnet-04c1fa565da32dbaf",
+            "subnet-054ad0183286e717b",
+            "subnet-0b3861508471e6c1e",
+            "subnet-094b2fc905022e004"
         ],
         "amiType": "AL2_x86_64",
         "nodeRole": "arn:aws:iam::221370546661:role/smart-ClusterRole",
@@ -244,7 +245,7 @@ aws eks create-nodegroup --cluster-name smart-cluster --nodegroup-name smart-clu
   > Route 53 ↔ ALB ↔ Node ↔ Pod로 트래픽이 라우팅됨
 - iam role [external DNS]
 - eks에 [exteranl DNS ] role 연결 -> serviceaccount.yaml
-- deployment.yaml 배포시 spec.template.spec 에 serviceAccountName cnrk
+- deployment.yaml 배포시 spec.template.spec 에 serviceAccountName
 - service.yaml 생성
 - ingress.yaml 배포시 annotation에 설정
 
@@ -359,7 +360,7 @@ k apply -f aws/external-dns/test.yaml
 해당 작업까지 eks에서 서비스를 external-dns를 통해 외부에서 접속하는 방법까지 진행
 아래 내용은 https로 접근 하기 위해 cert-manager를 적용하는 방법 진행
 
-## cert-manager
+## AWS load Balancer controller
 
 https://catalog.us-east-1.prod.workshops.aws/v2/workshops/9c0aa9ab-90a9-44a6-abe1-8dff360ae428/ko-KR/60-ingress-controller/100-launch-alb
 
@@ -409,6 +410,15 @@ eksctl create iamserviceaccount \
 ```
 
 ```
+# IRSA 정보 확인
+eksctl get iamserviceaccount --cluster
+
+# Kubernetes 서비스 어카운트 확인
+kubectl get serviceaccounts -n kube-system aws-load-balancer-controller -o yaml
+
+```
+
+```
 2024-04-22 15:33:48 [ℹ]  1 existing iamserviceaccount(s) (external-dns/external-dns) will be excluded
 2024-04-22 15:33:48 [ℹ]  1 iamserviceaccount (kube-system/aws-load-balancer-controller) was included (based on the include/exclude rules)
 2024-04-22 15:33:48 [!]  serviceaccounts that exist in Kubernetes will be excluded, use --override-existing-serviceaccounts to override
@@ -440,19 +450,26 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
 kubectl get po -n kube-system | egrep -o "aws-load-balancer[a-zA-Z0-9-]+"
 ```
 
-- 테스트
-
 ```
-k apply -f aws-load-balancer-controller/aws-lb-ingress-demo.yaml
+# Kubernetes CRD 확인
+kubectl get crd
+
+# ingressclassparams.elbv2.k8s.aws
+# targetgroupbindings.elbv2.k8s.aws
+
+# AWS Load Balancer Controller Role 확인
+kubectl describe clusterroles.rbac.authorization.k8s.io aws-load-balancer-controller-role
+
+# AWS Load Balancer Controller 확인
+kubectl get deployment -n kube-system aws-load-balancer-controller
+
+kubectl describe deploy -n kube-system aws-load-balancer-controller
 ```
 
-위 까지 진행 후 load-balancer를 통해서 도메인으로 접속 되는 걸 확인
 https://docs.aws.amazon.com/ko_kr/eks/latest/userguide/network-load-balancing.html
 
-- cert-manager 설치
+- 테스트 및 확인
 
 ```
-helm repo add jetstack https://charts.jetstack.io
-helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --set installCRDs=true
-
+k apply -f loadbalancer-controller
 ```
